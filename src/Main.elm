@@ -12,6 +12,26 @@ import Random.List exposing (choose)
 
 
 
+-- TYPES
+
+
+type Sets
+    = Sets (List String)
+
+
+type Promos
+    = Promos (List String)
+
+
+type alias SetsToChoose =
+    { sets : Sets, promos : Promos }
+
+
+type Cards
+    = Cards (List String)
+
+
+
 -- MAIN
 
 
@@ -36,9 +56,9 @@ type ApiStatus a
 
 
 type Model
-    = GetSets (ApiStatus (List String))
-    | Choosing (List String) (List String) -- all sets to choose, and those currently chosen
-    | GetCards (List String) (List String) (ApiStatus (List String)) -- as above
+    = GetSets (ApiStatus SetsToChoose)
+    | Choosing SetsToChoose SetsToChoose -- all sets to choose, and those currently chosen
+    | GetCards SetsToChoose SetsToChoose (ApiStatus Cards) -- as above
 
 
 init : () -> ( Model, Cmd Msg )
@@ -52,11 +72,12 @@ init _ =
 
 type Msg
     = Load
-    | GotSets (Result Http.Error (List String))
+    | GotSets (Result Http.Error Sets)
+    | GotPromos (Result Http.Error Promos)
     | Toggle String
-    | Generate (List String)
-    | GotCards (Result Http.Error (List String))
-    | Randomised (List String)
+    | Generate SetsToChoose
+    | GotCards (Result Http.Error Cards)
+    | Randomised Cards
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -68,45 +89,92 @@ update msg model =
         GotSets result ->
             case result of
                 Ok sets ->
-                    ( GetSets (Success sets), Cmd.none )
+                    ( GetSets (Success { sets = sets, promos = Promos [] }), getPromos )
+
+                Err _ ->
+                    ( GetSets Failure, Cmd.none )
+
+        GotPromos result ->
+            case result of
+                Ok promos ->
+                    case model of
+                        GetSets (Success setsandpromos) ->
+                            let
+                                allsets =
+                                    case setsandpromos.sets of
+                                        Sets s ->
+                                            s
+                            in
+                            ( GetSets <| Success <| { sets = Sets (List.filter ((/=) "promo") allsets), promos = promos }, Cmd.none )
+
+                        GetSets status ->
+                            ( GetSets status, Cmd.none )
+
+                        Choosing all current ->
+                            ( Choosing all current, Cmd.none )
+
+                        GetCards all current status ->
+                            ( GetCards all current status, Cmd.none )
 
                 Err _ ->
                     ( GetSets Failure, Cmd.none )
 
         Toggle toggled ->
             let
-                newSets current =
-                    if List.member toggled current then
-                        List.filter ((/=) toggled) current
+                newSets (Sets allSets) (Promos allPromos) current =
+                    let
+                        currentsets =
+                            case current.sets of
+                                Sets s ->
+                                    s
+
+                        currentpromos =
+                            case current.promos of
+                                Promos p ->
+                                    p
+                    in
+                    if List.member toggled allSets then
+                        if List.member toggled currentsets then
+                            { current | sets = Sets (List.filter ((/=) toggled) currentsets) }
+
+                        else
+                            { current | sets = Sets (toggled :: currentsets) }
+
+                    else if List.member toggled allPromos then
+                        if List.member toggled currentpromos then
+                            { current | promos = Promos (List.filter ((/=) toggled) currentpromos) }
+
+                        else
+                            { current | promos = Promos (toggled :: currentpromos) }
 
                     else
-                        toggled :: current
+                        current
             in
             case model of
                 GetSets (Success all) ->
-                    ( Choosing all (newSets []), Cmd.none )
+                    ( Choosing all (newSets all.sets all.promos { sets = Sets [], promos = Promos [] }), Cmd.none )
 
                 GetSets status ->
                     ( GetSets status, Cmd.none )
 
                 Choosing all current ->
-                    ( Choosing all (newSets current), Cmd.none )
+                    ( Choosing all (newSets all.sets all.promos current), Cmd.none )
 
                 GetCards all current status ->
-                    ( GetCards all (newSets current) status, Cmd.none )
+                    ( GetCards all (newSets all.sets all.promos current) status, Cmd.none )
 
         GotCards result ->
             case result of
-                Ok cardlist ->
+                Ok (Cards cardlist) ->
                     case model of
                         GetSets status ->
                             ( GetSets status, Cmd.none )
 
                         Choosing all current ->
-                            ( GetCards all current Loading, Random.generate Randomised (randomiser 10 cardlist) )
+                            ( GetCards all current Loading, randomiser 10 cardlist |> Random.map Cards |> Random.generate Randomised )
 
                         GetCards all current _ ->
-                            ( GetCards all current Loading, Random.generate Randomised (randomiser 10 cardlist) )
+                            ( GetCards all current Loading, randomiser 10 cardlist |> Random.map Cards |> Random.generate Randomised )
 
                 Err _ ->
                     case model of
@@ -176,36 +244,55 @@ viewMore model =
             text "Loading sets..."
 
         GetSets (Success sets) ->
-            setChoice sets []
+            setChoice sets { sets = Sets [], promos = Promos [] }
 
         Choosing sets chosen ->
             setChoice sets chosen
 
         GetCards sets chosen status ->
-            div [] [ setChoice sets chosen, viewCards status ]
+            div [] [ setChoice sets chosen, viewCards sets status ]
 
 
-setChoice : List String -> List String -> Html Msg
-setChoice setnames chosen =
-    setnames
-        |> map (\set -> div [] [ label [] [ text set ], input [ type_ "checkbox", onClick (Toggle set), checked (List.member set chosen) ] [] ])
-        |> (\html -> html ++ [ button [ onClick (Generate chosen) ] [ text "generate cards" ] ])
+setChoice : SetsToChoose -> SetsToChoose -> Html Msg
+setChoice all chosen =
+    let
+        allSets =
+            case all.sets of
+                Sets s ->
+                    s
+
+        allPromos =
+            case all.promos of
+                Promos p ->
+                    p
+
+        chosenSets =
+            case chosen.sets of
+                Sets s ->
+                    s
+
+        chosenPromos =
+            case chosen.promos of
+                Promos p ->
+                    p
+    in
+    (allSets ++ allPromos)
+        |> map (\set -> div [] [ label [] [ text set ], input [ type_ "checkbox", onClick (Toggle set), checked (List.member set chosenSets || List.member set chosenPromos) ] [] ])
+        |> (\html -> html ++ [ button [ chosen |> Generate |> onClick ] [ text "generate cards" ] ])
         |> div []
 
 
-viewCards : ApiStatus (List String) -> Html Msg
-viewCards status =
+viewCards : SetsToChoose -> ApiStatus Cards -> Html Msg
+viewCards sets status =
     case status of
         Failure ->
             div []
-                [ text "There was a problem getting cards."
-                , button [ onClick Load ] [ text "Try Again!" ]
-                ]
+                [ text "There was a problem getting cards, please try again." ]
 
         Loading ->
             text "Loading cards..."
 
-        Success cards ->
+        Success (Cards cards) ->
             div []
                 [ div [] <|
                     map getCardImage cards
@@ -243,26 +330,56 @@ getSets =
         }
 
 
-getCards : List String -> Cmd Msg
-getCards sets =
+getCards : SetsToChoose -> Cmd Msg
+getCards { sets, promos } =
     let
+        actualsets =
+            case sets of
+                Sets s ->
+                    s
+
+        actualpromos =
+            case promos of
+                Promos p ->
+                    p
+
         url =
-            "http://dominion.zigmond.uk/cards?is-kingdom&set=" ++ String.join "&set=" sets
+            -- horrible cheat to make sure we get an empty list back. There should be no need to use
+            -- an actual HTTP request here but not sure how to get out of it, there doesn't seem to
+            -- be a way to make a "constant command"
+            if List.isEmpty actualsets then
+                "http://dominion.zigmond.uk/cards?max-coin-cost=-1"
+
+            else
+                "http://dominion.zigmond.uk/cards?is-kingdom&set=" ++ String.join "&set=" actualsets
     in
     Http.get
         { url = url
-        , expect = Http.expectJson GotCards cardDecoder
+        , expect = Http.expectJson (Result.map (\(Cards cards) -> Cards (cards ++ actualpromos)) >> GotCards) cardDecoder
         }
 
 
-setsDecoder : Decoder (List String)
+getPromos : Cmd Msg
+getPromos =
+    Http.get
+        { url = "http://dominion.zigmond.uk/cards?is-kingdom&set=promo"
+        , expect = Http.expectJson GotPromos promosDecoder
+        }
+
+
+setsDecoder : Decoder Sets
 setsDecoder =
-    list string
+    list string |> Json.Decode.map Sets
 
 
-cardDecoder : Decoder (List String)
+cardDecoder : Decoder Cards
 cardDecoder =
-    list (field "name" string)
+    list (field "name" string) |> Json.Decode.map Cards
+
+
+promosDecoder : Decoder Promos
+promosDecoder =
+    list (field "name" string) |> Json.Decode.map Promos
 
 
 
@@ -283,10 +400,30 @@ randomiser n l =
                             (\( maybechosen, left ) ->
                                 case maybechosen of
                                     Nothing ->
-                                        Random.constant left
+                                        Random.constant sofar
 
                                     Just a ->
                                         go (x - 1) left (a :: sofar)
                             )
     in
     go n l []
+
+
+
+-- NEXT THINGS TO DO:
+-- - separate promo cards into individual ones (done, but should separate out into a sublist)
+-- - have a nicer interface for ase and intrigue (at the very least, get rid of the "bare" sets)
+-- - put logic in so that *kingdom piles" come up, rather than individual cards (knights, castles, split piles)
+-- - add a "select all" button
+-- SLIGHTLY FURTHER OFF:
+-- - add "horizontal cards" (Events etc), with an option to customise a rule for them
+-- - add logic for any individual cards:
+-- -- (eg Young Witch needs an 11th card, and a way to visually identify it as the Bane)
+-- -- Black Market deck (need options for how many cards, or whether to include all!)
+-- - other custom logic for additional cards/materials needed
+-- - logic for deciding whether to use Platinum/Colony, or Shelters
+-- - add facility to ban individual cards
+-- - other options like no attacks, no attacks without moat, at least one village etc
+-- - option to order cards by name or price?
+-- - (eventually) show all needed cards (including Basic cards) in a nice visual layout!
+-- - also implement "caching" of the API response, only requesting again when the sets selected have changed
