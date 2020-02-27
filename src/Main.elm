@@ -1,7 +1,7 @@
 module Main exposing (main)
 
 import Browser
-import Html exposing (Html, button, div, h2, img, input, label, text)
+import Html exposing (Html, button, div, h2, img, input, label, strong, text)
 import Html.Attributes exposing (alt, checked, src, type_)
 import Html.Events exposing (onClick)
 import Http
@@ -24,7 +24,9 @@ type Promos
 
 
 type alias SetsToChoose =
-    { sets : Sets, promos : Promos }
+    { sets : Sets
+    , promos : Promos
+    }
 
 
 type Cards
@@ -75,6 +77,8 @@ type Msg
     | GotSets (Result Http.Error Sets)
     | GotPromos (Result Http.Error Promos)
     | Toggle String
+    | SelectAll
+    | DeselectAll
     | Generate SetsToChoose
     | GotCards (Result Http.Error Cards)
     | Randomised Cards
@@ -105,7 +109,13 @@ update msg model =
                                         Sets s ->
                                             s
                             in
-                            ( GetSets <| Success <| { sets = Sets (List.filter ((/=) "promo") allsets), promos = promos }, Cmd.none )
+                            ( GetSets <|
+                                Success <|
+                                    { sets = Sets (List.filter ((/=) "promo") allsets)
+                                    , promos = promos
+                                    }
+                            , Cmd.none
+                            )
 
                         GetSets status ->
                             ( GetSets status, Cmd.none )
@@ -142,7 +152,11 @@ update msg model =
 
                     else if List.member toggled allPromos then
                         if List.member toggled currentpromos then
-                            { current | promos = Promos (List.filter ((/=) toggled) currentpromos) }
+                            { current
+                                | promos =
+                                    Promos
+                                        (List.filter ((/=) toggled) currentpromos)
+                            }
 
                         else
                             { current | promos = Promos (toggled :: currentpromos) }
@@ -152,7 +166,15 @@ update msg model =
             in
             case model of
                 GetSets (Success all) ->
-                    ( Choosing all (newSets all.sets all.promos { sets = Sets [], promos = Promos [] }), Cmd.none )
+                    ( Choosing all
+                        (newSets all.sets
+                            all.promos
+                            { sets = Sets []
+                            , promos = Promos []
+                            }
+                        )
+                    , Cmd.none
+                    )
 
                 GetSets status ->
                     ( GetSets status, Cmd.none )
@@ -163,6 +185,36 @@ update msg model =
                 GetCards all current status ->
                     ( GetCards all (newSets all.sets all.promos current) status, Cmd.none )
 
+        SelectAll ->
+            case model of
+                GetSets (Success all) ->
+                    ( Choosing all all, Cmd.none )
+
+                GetSets status ->
+                    ( GetSets status, Cmd.none )
+
+                Choosing all _ ->
+                    ( Choosing all all, Cmd.none )
+
+                GetCards all _ status ->
+                    ( GetCards all all status, Cmd.none )
+
+        DeselectAll ->
+            let noneSelected = { sets = Sets [], promos = Promos [] }
+            in
+            case model of
+                GetSets (Success all) ->
+                    ( Choosing all noneSelected, Cmd.none )
+
+                GetSets status ->
+                    ( GetSets status, Cmd.none )
+
+                Choosing all _ ->
+                    ( Choosing all noneSelected, Cmd.none )
+
+                GetCards all _ status ->
+                    ( GetCards all noneSelected status, Cmd.none )
+
         GotCards result ->
             case result of
                 Ok (Cards cardlist) ->
@@ -171,10 +223,18 @@ update msg model =
                             ( GetSets status, Cmd.none )
 
                         Choosing all current ->
-                            ( GetCards all current Loading, randomiser 10 cardlist |> Random.map Cards |> Random.generate Randomised )
+                            ( GetCards all current Loading
+                            , randomiser 10 cardlist
+                                |> Random.map Cards
+                                |> Random.generate Randomised
+                            )
 
                         GetCards all current _ ->
-                            ( GetCards all current Loading, randomiser 10 cardlist |> Random.map Cards |> Random.generate Randomised )
+                            ( GetCards all current Loading
+                            , randomiser 10 cardlist
+                                |> Random.map Cards
+                                |> Random.generate Randomised
+                            )
 
                 Err _ ->
                     case model of
@@ -250,7 +310,7 @@ viewMore model =
             setChoice sets chosen
 
         GetCards sets chosen status ->
-            div [] [ setChoice sets chosen, viewCards sets status ]
+            div [] [ setChoice sets chosen, viewCards status ]
 
 
 setChoice : SetsToChoose -> SetsToChoose -> Html Msg
@@ -275,15 +335,67 @@ setChoice all chosen =
             case chosen.promos of
                 Promos p ->
                     p
+
+        renderAsCheckbox set niceName =
+            div []
+                [ label [] [ text niceName ]
+                , input
+                    [ type_ "checkbox"
+                    , onClick (Toggle set)
+                    , checked (List.member set chosenSets || List.member set chosenPromos)
+                    ]
+                    []
+                ]
+
+        renderInList set =
+            case set of
+                "base" ->
+                    strong [] [ text "Base set" ]
+
+                "base-first-ed" ->
+                    renderAsCheckbox "base-first-ed" "First Edition"
+
+                "base-second-ed" ->
+                    renderAsCheckbox "base-second-ed" "Second Edition"
+
+                "intrigue" ->
+                    strong [] [ text "Intrigue" ]
+
+                "intrigue-first-ed" ->
+                    renderAsCheckbox "intrigue-first-ed" "First Edition"
+
+                "intrigue-second-ed" ->
+                    renderAsCheckbox "intrigue-second-ed" "Second Edition"
+
+                name ->
+                    renderAsCheckbox name (transformName name)
+
+        transformName =
+            String.split "-" >> map titleCase >> String.join " "
     in
-    (allSets ++ allPromos)
-        |> map (\set -> div [] [ label [] [ text set ], input [ type_ "checkbox", onClick (Toggle set), checked (List.member set chosenSets || List.member set chosenPromos) ] [] ])
-        |> (\html -> html ++ [ button [ chosen |> Generate |> onClick ] [ text "generate cards" ] ])
+    div []
+        [ button [ onClick SelectAll ] [ text "Select All" ]
+        , button [ onClick DeselectAll ] [ text "Deselect All " ]
+        ]
+        :: (map renderInList allSets
+                ++ strong [] [ text "promo cards:" ]
+                :: map renderInList allPromos
+           )
+        |> (\html ->
+                html
+                    ++ [ button
+                            [ chosen
+                                |> Generate
+                                |> onClick
+                            ]
+                            [ text "generate cards" ]
+                       ]
+           )
         |> div []
 
 
-viewCards : SetsToChoose -> ApiStatus Cards -> Html Msg
-viewCards sets status =
+viewCards : ApiStatus Cards -> Html Msg
+viewCards status =
     case status of
         Failure ->
             div []
@@ -306,16 +418,18 @@ getCardImage name =
             "%PUBLIC_URL%/card-images/"
                 ++ (name |> String.split "-" |> map titleCase |> String.join "_")
                 ++ ".jpg"
-
-        titleCase str =
-            case String.uncons str of
-                Nothing ->
-                    ""
-
-                Just ( first, rest ) ->
-                    String.cons (Char.toUpper first) rest
     in
     img [ src transformedName, alt name ] []
+
+
+titleCase : String -> String
+titleCase str =
+    case String.uncons str of
+        Nothing ->
+            ""
+
+        Just ( first, rest ) ->
+            String.cons (Char.toUpper first) rest
 
 
 
@@ -351,11 +465,17 @@ getCards { sets, promos } =
                 "http://dominion.zigmond.uk/cards?max-coin-cost=-1"
 
             else
-                "http://dominion.zigmond.uk/cards?is-kingdom&set=" ++ String.join "&set=" actualsets
+                "http://dominion.zigmond.uk/cards?is-kingdom&set="
+                    ++ String.join "&set=" actualsets
     in
     Http.get
         { url = url
-        , expect = Http.expectJson (Result.map (\(Cards cards) -> Cards (cards ++ actualpromos)) >> GotCards) cardDecoder
+        , expect =
+            Http.expectJson
+                (Result.map (\(Cards cards) -> Cards (cards ++ actualpromos))
+                    >> GotCards
+                )
+                cardDecoder
         }
 
 
@@ -410,12 +530,8 @@ randomiser n l =
 
 
 
--- NEXT THINGS TO DO:
--- - separate promo cards into individual ones (done, but should separate out into a sublist)
--- - have a nicer interface for ase and intrigue (at the very least, get rid of the "bare" sets)
+-- NEXT TO DO:
 -- - put logic in so that *kingdom piles" come up, rather than individual cards (knights, castles, split piles)
--- - add a "select all" button
--- SLIGHTLY FURTHER OFF:
 -- - add "horizontal cards" (Events etc), with an option to customise a rule for them
 -- - add logic for any individual cards:
 -- -- (eg Young Witch needs an 11th card, and a way to visually identify it as the Bane)
