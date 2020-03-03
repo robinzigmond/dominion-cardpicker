@@ -1,36 +1,16 @@
 module Main exposing (main)
 
 import Browser
+import CardUtils exposing (getKingdomSets)
 import Html exposing (Html, button, div, h2, img, input, label, strong, text)
-import Html.Attributes exposing (alt, checked, src, type_)
+import Html.Attributes exposing (alt, checked, for, id, src, type_)
 import Html.Events exposing (onClick)
 import Http
-import Json.Decode exposing (Decoder, field, list, string)
+import Json.Decode exposing (Decoder, bool, field, list, string)
 import List exposing (map)
 import Random
 import Random.List exposing (choose)
-
-
-
--- TYPES
-
-
-type Sets
-    = Sets (List String)
-
-
-type Promos
-    = Promos (List String)
-
-
-type alias SetsToChoose =
-    { sets : Sets
-    , promos : Promos
-    }
-
-
-type Cards
-    = Cards (List String)
+import Types exposing (Cards(..), Promos(..), Sets(..), SetsToChoose)
 
 
 
@@ -61,6 +41,7 @@ type Model
     = GetSets (ApiStatus SetsToChoose)
     | Choosing SetsToChoose SetsToChoose -- all sets to choose, and those currently chosen
     | GetCards SetsToChoose SetsToChoose (ApiStatus Cards) -- as above
+    | ChosenCards SetsToChoose SetsToChoose (List String)
 
 
 init : () -> ( Model, Cmd Msg )
@@ -81,7 +62,7 @@ type Msg
     | DeselectAll
     | Generate SetsToChoose
     | GotCards (Result Http.Error Cards)
-    | Randomised Cards
+    | Randomised (List String)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -126,11 +107,17 @@ update msg model =
                         GetCards all current status ->
                             ( GetCards all current status, Cmd.none )
 
+                        ChosenCards all current chosen ->
+                            ( ChosenCards all current chosen, Cmd.none )
+
                 Err _ ->
                     ( GetSets Failure, Cmd.none )
 
         Toggle toggled ->
             let
+                makeCard all nameToFind =
+                    List.filter (.name >> (==) nameToFind) all
+
                 newSets (Sets allSets) (Promos allPromos) current =
                     let
                         currentsets =
@@ -150,16 +137,16 @@ update msg model =
                         else
                             { current | sets = Sets (toggled :: currentsets) }
 
-                    else if List.member toggled allPromos then
-                        if List.member toggled currentpromos then
+                    else if List.member toggled (map .name allPromos) then
+                        if List.member toggled (map .name currentpromos) then
                             { current
                                 | promos =
                                     Promos
-                                        (List.filter ((/=) toggled) currentpromos)
+                                        (List.filter (.name >> (/=) toggled) currentpromos)
                             }
 
                         else
-                            { current | promos = Promos (toggled :: currentpromos) }
+                            { current | promos = Promos (makeCard allPromos toggled ++ currentpromos) }
 
                     else
                         current
@@ -185,6 +172,9 @@ update msg model =
                 GetCards all current status ->
                     ( GetCards all (newSets all.sets all.promos current) status, Cmd.none )
 
+                ChosenCards all current picked ->
+                    ( ChosenCards all (newSets all.sets all.promos current) picked, Cmd.none )
+
         SelectAll ->
             case model of
                 GetSets (Success all) ->
@@ -199,8 +189,13 @@ update msg model =
                 GetCards all _ status ->
                     ( GetCards all all status, Cmd.none )
 
+                ChosenCards all _ picked ->
+                    ( ChosenCards all all picked, Cmd.none )
+
         DeselectAll ->
-            let noneSelected = { sets = Sets [], promos = Promos [] }
+            let
+                noneSelected =
+                    { sets = Sets [], promos = Promos [] }
             in
             case model of
                 GetSets (Success all) ->
@@ -215,6 +210,9 @@ update msg model =
                 GetCards all _ status ->
                     ( GetCards all noneSelected status, Cmd.none )
 
+                ChosenCards all _ picked ->
+                    ( ChosenCards all noneSelected picked, Cmd.none )
+
         GotCards result ->
             case result of
                 Ok (Cards cardlist) ->
@@ -224,17 +222,24 @@ update msg model =
 
                         Choosing all current ->
                             ( GetCards all current Loading
-                            , randomiser 10 cardlist
-                                |> Random.map Cards
+                            , cardlist
+                                |> List.filter .isKingdom
+                                |> getKingdomSets
+                                |> randomiser 10
                                 |> Random.generate Randomised
                             )
 
                         GetCards all current _ ->
                             ( GetCards all current Loading
-                            , randomiser 10 cardlist
-                                |> Random.map Cards
+                            , cardlist
+                                |> List.filter .isKingdom
+                                |> getKingdomSets
+                                |> randomiser 10
                                 |> Random.generate Randomised
                             )
+
+                        ChosenCards all current chosen ->
+                            ( ChosenCards all current chosen, Cmd.none )
 
                 Err _ ->
                     case model of
@@ -247,6 +252,9 @@ update msg model =
                         GetCards all current _ ->
                             ( GetCards all current Failure, Cmd.none )
 
+                        ChosenCards all current chosen ->
+                            ( ChosenCards all current chosen, Cmd.none )
+
         Generate chosen ->
             case model of
                 GetSets status ->
@@ -258,16 +266,13 @@ update msg model =
                 GetCards all current _ ->
                     ( GetCards all current Loading, getCards chosen )
 
-        Randomised cards ->
-            case model of
-                GetSets status ->
-                    ( GetSets status, Cmd.none )
+                ChosenCards all current _ ->
+                    ( GetCards all current Loading, getCards chosen )
 
-                Choosing all current ->
-                    ( Choosing all current, Cmd.none )
+        Randomised chosen -> case model of
+            GetCards all current _ -> ( ChosenCards all current chosen, Cmd.none )
 
-                GetCards all current _ ->
-                    ( GetCards all current (Success cards), Cmd.none )
+            _ -> ( model, Cmd.none )
 
 
 
@@ -312,6 +317,9 @@ viewMore model =
         GetCards sets chosen status ->
             div [] [ setChoice sets chosen, viewCards status ]
 
+        ChosenCards sets chosen randomised ->
+            div [] [ setChoice sets chosen, viewCardImages randomised ]
+
 
 setChoice : SetsToChoose -> SetsToChoose -> Html Msg
 setChoice all chosen =
@@ -338,11 +346,19 @@ setChoice all chosen =
 
         renderAsCheckbox set niceName =
             div []
-                [ label [] [ text niceName ]
+                [ label [ for set ] [ text niceName ]
                 , input
                     [ type_ "checkbox"
+                    , id set
                     , onClick (Toggle set)
-                    , checked (List.member set chosenSets || List.member set chosenPromos)
+                    , checked
+                        (List.member set chosenSets
+                            || List.member set
+                                (chosenPromos
+                                    |> List.filter .isKingdom
+                                    |> map .name
+                                )
+                        )
                     ]
                     []
                 ]
@@ -379,7 +395,7 @@ setChoice all chosen =
         ]
         :: (map renderInList allSets
                 ++ strong [] [ text "promo cards:" ]
-                :: map renderInList allPromos
+                :: (getKingdomSets >> map renderInList) allPromos
            )
         |> (\html ->
                 html
@@ -404,11 +420,12 @@ viewCards status =
         Loading ->
             text "Loading cards..."
 
-        Success (Cards cards) ->
-            div []
-                [ div [] <|
-                    map getCardImage cards
-                ]
+        Success _ ->
+            text "Loading cards.."
+
+
+viewCardImages : List String -> Html Msg
+viewCardImages names = names |> map getCardImage |> div []
 
 
 getCardImage : String -> Html Msg
@@ -465,7 +482,7 @@ getCards { sets, promos } =
                 "http://dominion.zigmond.uk/cards?max-coin-cost=-1"
 
             else
-                "http://dominion.zigmond.uk/cards?is-kingdom&set="
+                "http://dominion.zigmond.uk/cards?set="
                     ++ String.join "&set=" actualsets
     in
     Http.get
@@ -482,7 +499,7 @@ getCards { sets, promos } =
 getPromos : Cmd Msg
 getPromos =
     Http.get
-        { url = "http://dominion.zigmond.uk/cards?is-kingdom&set=promo"
+        { url = "http://dominion.zigmond.uk/cards?set=promo"
         , expect = Http.expectJson GotPromos promosDecoder
         }
 
@@ -494,12 +511,36 @@ setsDecoder =
 
 cardDecoder : Decoder Cards
 cardDecoder =
-    list (field "name" string) |> Json.Decode.map Cards
+    list
+        (Json.Decode.map3
+            (\name isKingdom linked ->
+                { name = name
+                , isKingdom = isKingdom
+                , linkedCards = linked
+                }
+            )
+            (field "name" string)
+            (field "is-kingdom" bool)
+            (field "linked-cards" (list string))
+        )
+        |> Json.Decode.map Cards
 
 
 promosDecoder : Decoder Promos
 promosDecoder =
-    list (field "name" string) |> Json.Decode.map Promos
+    list
+        (Json.Decode.map3
+            (\name isKingdom linked ->
+                { name = name
+                , isKingdom = isKingdom
+                , linkedCards = linked
+                }
+            )
+            (field "name" string)
+            (field "is-kingdom" bool)
+            (field "linked-cards" (list string))
+        )
+        |> Json.Decode.map Promos
 
 
 
@@ -530,9 +571,13 @@ randomiser n l =
 
 
 
--- NEXT TO DO:
--- - put logic in so that *kingdom piles" come up, rather than individual cards (knights, castles, split piles)
+-- TO DO:
+-- - fix "kingdom piles":
+-- -- get Sauna/Avanto checkbox to work
+-- -- add images
+-- -- get split piles to be ordere by cost (add cost to card records)
 -- - add "horizontal cards" (Events etc), with an option to customise a rule for them
+-- - add CSS (using elm-css package, rather than separate CSS file)
 -- - add logic for any individual cards:
 -- -- (eg Young Witch needs an 11th card, and a way to visually identify it as the Bane)
 -- -- Black Market deck (need options for how many cards, or whether to include all!)
