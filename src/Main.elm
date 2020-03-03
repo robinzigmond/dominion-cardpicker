@@ -612,9 +612,7 @@ randomiser n l =
 
 -- TO DO:
 -- - fix "kingdom piles":
--- -- get Sauna/Avanto checkbox to work
--- -- add images
--- -- get split piles to be ordere by cost (add cost to card records)
+-- -- get split piles to be ordered by cost (add cost to card records)
 -- - add "horizontal cards" (Events etc), with an option to customise a rule for them
 -- - add CSS (using elm-css package, rather than separate CSS file)
 -- - add logic for any individual cards:
