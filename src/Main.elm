@@ -147,9 +147,46 @@ update msg model =
 
                         else
                             { current | promos = Promos (makeCard allPromos toggled ++ currentpromos) }
+                        -- deal with case of split pile or similar (only Avanto/Sauna at the moment)
 
                     else
-                        current
+                        let
+                            possibleSplitPromos =
+                                allPromos
+                                    |> map .name
+                                    |> List.filter (\name -> List.member name (String.split "/" toggled))
+
+                            splitSelected =
+                                currentpromos
+                                    |> map .name
+                                    |> List.filter (\name -> List.member name (String.split "/" toggled))
+                        in
+                        if List.length possibleSplitPromos > 0 then
+                            if List.length splitSelected == 0 then
+                                { current
+                                    | promos =
+                                        Promos
+                                            (currentpromos
+                                                ++ List.concatMap (makeCard allPromos) possibleSplitPromos
+                                            )
+                                }
+
+                            else
+                                { current
+                                    | promos =
+                                        Promos
+                                            (List.filter
+                                                (\p ->
+                                                    possibleSplitPromos
+                                                        |> List.member p.name
+                                                        |> not
+                                                )
+                                                allPromos
+                                            )
+                                }
+
+                        else
+                            current
             in
             case model of
                 GetSets (Success all) ->
@@ -269,10 +306,13 @@ update msg model =
                 ChosenCards all current _ ->
                     ( GetCards all current Loading, getCards chosen )
 
-        Randomised chosen -> case model of
-            GetCards all current _ -> ( ChosenCards all current chosen, Cmd.none )
+        Randomised chosen ->
+            case model of
+                GetCards all current _ ->
+                    ( ChosenCards all current chosen, Cmd.none )
 
-            _ -> ( model, Cmd.none )
+                _ ->
+                    ( model, Cmd.none )
 
 
 
@@ -353,11 +393,9 @@ setChoice all chosen =
                     , onClick (Toggle set)
                     , checked
                         (List.member set chosenSets
-                            || List.member set
-                                (chosenPromos
-                                    |> List.filter .isKingdom
-                                    |> map .name
-                                )
+                            || List.any
+                                (\name -> List.member name (map .name chosenPromos))
+                                (String.split "/" set)
                         )
                     ]
                     []
@@ -425,7 +463,8 @@ viewCards status =
 
 
 viewCardImages : List String -> Html Msg
-viewCardImages names = names |> map getCardImage |> div []
+viewCardImages names =
+    names |> map getCardImage |> div []
 
 
 getCardImage : String -> Html Msg
