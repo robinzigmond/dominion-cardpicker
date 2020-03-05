@@ -19,6 +19,9 @@ type alias Card =
     { name : String
     , isKingdom : Bool
     , linkedCards : List String
+    , coinCost : Int
+    , potionCost : Bool
+    , debtCost : Int
     }
 
 

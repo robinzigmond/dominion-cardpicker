@@ -3,10 +3,10 @@ module Main exposing (main)
 import Browser
 import CardUtils exposing (getKingdomSets)
 import Html exposing (Html, button, div, h2, img, input, label, strong, text)
-import Html.Attributes exposing (alt, checked, for, id, src, type_)
+import Html.Attributes exposing (alt, checked, for, id, src, style, type_)
 import Html.Events exposing (onClick)
 import Http
-import Json.Decode exposing (Decoder, bool, field, list, string)
+import Json.Decode exposing (Decoder, bool, field, int, list, null, oneOf, string)
 import List exposing (map)
 import Random
 import Random.List exposing (choose)
@@ -472,10 +472,17 @@ getCardImage name =
     let
         transformedName =
             "%PUBLIC_URL%/card-images/"
-                ++ (name |> String.split "-" |> map titleCase |> String.join "_")
+                ++ (name
+                        |> String.split "-"
+                        |> map titleCase
+                        |> String.join "_"
+                        |> String.split "/"
+                        |> map titleCase
+                        |> String.join "_"
+                   )
                 ++ ".jpg"
     in
-    img [ src transformedName, alt name ] []
+    img [ src transformedName, alt name, style "width" "150px" ] []
 
 
 titleCase : String -> String
@@ -551,16 +558,22 @@ setsDecoder =
 cardDecoder : Decoder Cards
 cardDecoder =
     list
-        (Json.Decode.map3
-            (\name isKingdom linked ->
+        (Json.Decode.map6
+            (\name isKingdom linked coinCost potionCost debtCost ->
                 { name = name
                 , isKingdom = isKingdom
                 , linkedCards = linked
+                , coinCost = coinCost
+                , potionCost = potionCost
+                , debtCost = debtCost
                 }
             )
             (field "name" string)
             (field "is-kingdom" bool)
             (field "linked-cards" (list string))
+            (field "coin-cost" <| oneOf [ int, null 0 ])
+            (field "potion-cost" <| oneOf [ bool, null False ])
+            (field "debt-cost" <| oneOf [ int, null 0 ])
         )
         |> Json.Decode.map Cards
 
@@ -568,16 +581,22 @@ cardDecoder =
 promosDecoder : Decoder Promos
 promosDecoder =
     list
-        (Json.Decode.map3
-            (\name isKingdom linked ->
+        (Json.Decode.map6
+            (\name isKingdom linked coinCost potionCost debtCost ->
                 { name = name
                 , isKingdom = isKingdom
                 , linkedCards = linked
+                , coinCost = coinCost
+                , potionCost = potionCost
+                , debtCost = debtCost
                 }
             )
             (field "name" string)
             (field "is-kingdom" bool)
             (field "linked-cards" (list string))
+            (field "coin-cost" <| oneOf [ int, null 0 ])
+            (field "potion-cost" <| oneOf [ bool, null False ])
+            (field "debt-cost" <| oneOf [ int, null 0 ])
         )
         |> Json.Decode.map Promos
 
@@ -612,6 +631,7 @@ randomiser n l =
 
 -- TO DO:
 -- - fix "kingdom piles":
+-- -- fix load paths for splitpile cards
 -- -- get split piles to be ordered by cost (add cost to card records)
 -- - add "horizontal cards" (Events etc), with an option to customise a rule for them
 -- - add CSS (using elm-css package, rather than separate CSS file)

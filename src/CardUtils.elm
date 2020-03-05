@@ -17,19 +17,19 @@ getKingdomSets listOfCards =
                         List.filter
                             (\g ->
                                 List.any (\l -> List.member l g)
-                                    (card.name :: linkedKingdoms card cardlist)
+                                    (card :: linkedKingdoms card cardlist)
                             )
                             groups
                     of
                         [] ->
-                            go cards ((card.name :: linkedKingdoms card cardlist) :: groups)
+                            go cards ((card :: linkedKingdoms card cardlist) :: groups)
 
                         g :: _ ->
                             go cards <|
                                 List.map
                                     (\gr ->
                                         if gr == g then
-                                            card.name :: gr
+                                            card :: gr
 
                                         else
                                             gr
@@ -59,16 +59,61 @@ getKingdomSets listOfCards =
 
             else
                 String.join "&" group
+
+        combinedCost cardName =
+            let
+                card =
+                    case cardWithName listOfCards cardName of
+                        Just c ->
+                            c
+
+                        Nothing ->
+                            { name = "i-dont-exist"
+                            , isKingdom = False
+                            , linkedCards = []
+                            , coinCost = 0
+                            , potionCost = False
+                            , debtCost = 0
+                            }
+            in
+            100
+                * card.coinCost
+                + 10
+                * card.debtCost
+                + (if card.potionCost then
+                    1
+
+                   else
+                    0
+                  )
     in
-    go listOfCards [] |> List.map (Set.fromList >> Set.toList >> friendlyName)
+    go listOfCards []
+        |> List.map
+            (List.map .name
+                >> Set.fromList
+                >> Set.toList
+                >> List.sortBy combinedCost
+                >> friendlyName
+            )
 
 
-linkedKingdoms : Card -> List Card -> List String
+linkedKingdoms : Card -> List Card -> List Card
 linkedKingdoms card all =
-    List.filter
-        (\name ->
-            List.filter (\c -> c.name == name && c.isKingdom) all
-                |> List.isEmpty
-                |> not
-        )
-        card.linkedCards
+    card.linkedCards
+        |> List.map (cardWithName all)
+        |> List.concatMap
+            (\maybeCard ->
+                case maybeCard of
+                    Nothing ->
+                        []
+
+                    Just c ->
+                        [ c ]
+            )
+
+
+cardWithName : List Card -> String -> Maybe Card
+cardWithName cards name =
+    cards
+        |> List.filter (\c -> c.name == name && c.isKingdom)
+        |> List.head
