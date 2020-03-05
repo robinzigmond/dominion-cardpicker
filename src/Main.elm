@@ -181,7 +181,7 @@ update msg model =
                                                         |> List.member p.name
                                                         |> not
                                                 )
-                                                allPromos
+                                                currentpromos
                                             )
                                 }
 
@@ -630,9 +630,6 @@ randomiser n l =
 
 
 -- TO DO:
--- - fix "kingdom piles":
--- -- fix load paths for splitpile cards
--- -- get split piles to be ordered by cost (add cost to card records)
 -- - add "horizontal cards" (Events etc), with an option to customise a rule for them
 -- - add CSS (using elm-css package, rather than separate CSS file)
 -- - add logic for any individual cards:
