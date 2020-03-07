@@ -42,15 +42,15 @@ getKingdomSets listOfCards =
                                     groups
 
         friendlyName group =
-            if List.any ((==) "dame-molly") group then
+            if List.member "dame-molly" group then
                 "knights"
 
-            else if List.any ((==) "small-castle") group then
+            else if List.member "small-castle" group then
                 "castles"
 
             else if
                 List.length group == 2
-                -- split piles, need to sort by cost but leave for now
+
             then
                 String.join "/" group
 

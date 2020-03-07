@@ -1,4 +1,4 @@
-module Randomisers exposing (combineRandoms, filteredRandom)
+module Randomisers exposing (combineRandoms, filteredRandom, randomiser)
 
 import Random
 import Random.List exposing (choose)

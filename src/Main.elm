@@ -9,7 +9,7 @@ import Http
 import Json.Decode exposing (Decoder, bool, field, int, list, null, oneOf, string)
 import List exposing (map)
 import Random
-import Randomisers exposing (combineRandoms, filteredRandom)
+import Randomisers exposing (combineRandoms, filteredRandom, randomiser)
 import Types exposing (Cards(..), Promos(..), Sets(..), SetsToChoose)
 
 
@@ -262,8 +262,10 @@ update msg model =
                             , cardlist
                                 |> (\cards ->
                                         combineRandoms
-                                            (filteredRandom .isKingdom 10 cards
-                                                |> Random.map getKingdomSets
+                                            (cards
+                                                |> List.filter .isKingdom
+                                                |> getKingdomSets
+                                                |> randomiser 10
                                             )
                                             (filteredRandom isLandscape 2 cards |> Random.map (map .name))
                                    )
@@ -275,8 +277,10 @@ update msg model =
                             , cardlist
                                 |> (\cards ->
                                         combineRandoms
-                                            (filteredRandom .isKingdom 10 cards
-                                                |> Random.map getKingdomSets
+                                            (cards
+                                                |> List.filter .isKingdom
+                                                |> getKingdomSets
+                                                |> randomiser 10
                                             )
                                             (filteredRandom isLandscape 2 cards |> Random.map (map .name))
                                    )
