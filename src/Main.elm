@@ -1,7 +1,7 @@
 module Main exposing (main)
 
 import Browser
-import CardUtils exposing (getKingdomSets)
+import CardUtils exposing (getKingdomSets, isLandscape)
 import Html exposing (Html, button, div, h2, img, input, label, strong, text)
 import Html.Attributes exposing (alt, checked, for, id, src, style, type_)
 import Html.Events exposing (onClick)
@@ -9,7 +9,7 @@ import Http
 import Json.Decode exposing (Decoder, bool, field, int, list, null, oneOf, string)
 import List exposing (map)
 import Random
-import Random.List exposing (choose)
+import Randomisers exposing (combineRandoms, filteredRandom)
 import Types exposing (Cards(..), Promos(..), Sets(..), SetsToChoose)
 
 
@@ -260,18 +260,26 @@ update msg model =
                         Choosing all current ->
                             ( GetCards all current Loading
                             , cardlist
-                                |> List.filter .isKingdom
-                                |> getKingdomSets
-                                |> randomiser 10
+                                |> (\cards ->
+                                        combineRandoms
+                                            (filteredRandom .isKingdom 10 cards
+                                                |> Random.map getKingdomSets
+                                            )
+                                            (filteredRandom isLandscape 2 cards |> Random.map (map .name))
+                                   )
                                 |> Random.generate Randomised
                             )
 
                         GetCards all current _ ->
                             ( GetCards all current Loading
                             , cardlist
-                                |> List.filter .isKingdom
-                                |> getKingdomSets
-                                |> randomiser 10
+                                |> (\cards ->
+                                        combineRandoms
+                                            (filteredRandom .isKingdom 10 cards
+                                                |> Random.map getKingdomSets
+                                            )
+                                            (filteredRandom isLandscape 2 cards |> Random.map (map .name))
+                                   )
                                 |> Random.generate Randomised
                             )
 
@@ -558,14 +566,15 @@ setsDecoder =
 cardDecoder : Decoder Cards
 cardDecoder =
     list
-        (Json.Decode.map6
-            (\name isKingdom linked coinCost potionCost debtCost ->
+        (Json.Decode.map7
+            (\name isKingdom linked coinCost potionCost debtCost types ->
                 { name = name
                 , isKingdom = isKingdom
                 , linkedCards = linked
                 , coinCost = coinCost
                 , potionCost = potionCost
                 , debtCost = debtCost
+                , types = types
                 }
             )
             (field "name" string)
@@ -574,6 +583,7 @@ cardDecoder =
             (field "coin-cost" <| oneOf [ int, null 0 ])
             (field "potion-cost" <| oneOf [ bool, null False ])
             (field "debt-cost" <| oneOf [ int, null 0 ])
+            (field "types" (list string))
         )
         |> Json.Decode.map Cards
 
@@ -581,14 +591,15 @@ cardDecoder =
 promosDecoder : Decoder Promos
 promosDecoder =
     list
-        (Json.Decode.map6
-            (\name isKingdom linked coinCost potionCost debtCost ->
+        (Json.Decode.map7
+            (\name isKingdom linked coinCost potionCost debtCost types ->
                 { name = name
                 , isKingdom = isKingdom
                 , linkedCards = linked
                 , coinCost = coinCost
                 , potionCost = potionCost
                 , debtCost = debtCost
+                , types = types
                 }
             )
             (field "name" string)
@@ -597,48 +608,25 @@ promosDecoder =
             (field "coin-cost" <| oneOf [ int, null 0 ])
             (field "potion-cost" <| oneOf [ bool, null False ])
             (field "debt-cost" <| oneOf [ int, null 0 ])
+            (field "types" (list string))
         )
         |> Json.Decode.map Promos
 
 
 
--- general random generator to pick n distinct elements from a list
-
-
-randomiser : Int -> List a -> Random.Generator (List a)
-randomiser n l =
-    let
-        go m xs sofar =
-            case m of
-                0 ->
-                    Random.constant sofar
-
-                x ->
-                    choose xs
-                        |> Random.andThen
-                            (\( maybechosen, left ) ->
-                                case maybechosen of
-                                    Nothing ->
-                                        Random.constant sofar
-
-                                    Just a ->
-                                        go (x - 1) left (a :: sofar)
-                            )
-    in
-    go n l []
-
-
-
 -- TO DO:
--- - add "horizontal cards" (Events etc), with an option to customise a rule for them
 -- - add CSS (using elm-css package, rather than separate CSS file)
 -- - add logic for any individual cards:
 -- -- (eg Young Witch needs an 11th card, and a way to visually identify it as the Bane)
 -- -- Black Market deck (need options for how many cards, or whether to include all!)
 -- - other custom logic for additional cards/materials needed
 -- - logic for deciding whether to use Platinum/Colony, or Shelters
+-- - allow users to alter the logic for picking landscape cards (at the moment it's always 2, but allow
+-- "full random" with no limit, or with a limit of 2 or some other number, or with limits per type,
+-- or a fixed number of each type...)
 -- - add facility to ban individual cards
 -- - other options like no attacks, no attacks without moat, at least one village etc
 -- - option to order cards by name or price?
 -- - (eventually) show all needed cards (including Basic cards) in a nice visual layout!
+-- -- (At the very least, sort them in cost order)
 -- - also implement "caching" of the API response, only requesting again when the sets selected have changed

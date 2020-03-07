@@ -1,7 +1,12 @@
-module CardUtils exposing (getKingdomSets)
+module CardUtils exposing (getKingdomSets, isLandscape)
 
 import Set
 import Types exposing (Card)
+
+
+landscapes : List String
+landscapes =
+    [ "event", "landmark", "project" ]
 
 
 getKingdomSets : List Card -> List String
@@ -74,6 +79,7 @@ getKingdomSets listOfCards =
                             , coinCost = 0
                             , potionCost = False
                             , debtCost = 0
+                            , types = []
                             }
             in
             100
@@ -117,3 +123,13 @@ cardWithName cards name =
     cards
         |> List.filter (\c -> c.name == name && c.isKingdom)
         |> List.head
+
+
+isLandscape : Card -> Bool
+isLandscape card =
+    case card.types of
+        [ type_ ] ->
+            List.member type_ landscapes
+
+        _ ->
+            False

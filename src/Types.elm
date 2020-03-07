@@ -22,6 +22,7 @@ type alias Card =
     , coinCost : Int
     , potionCost : Bool
     , debtCost : Int
+    , types : List String
     }
 
 
