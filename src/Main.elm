@@ -2,14 +2,15 @@ module Main exposing (main)
 
 import Browser
 import CardUtils exposing (getKingdomSets, isLandscape)
-import Html exposing (Html, button, div, h2, img, input, label, strong, text)
-import Html.Attributes exposing (alt, checked, for, id, src, style, type_)
-import Html.Events exposing (onClick)
+import Html.Styled exposing (Attribute, Html, div, h2, input, label, strong, text, toUnstyled)
+import Html.Styled.Attributes exposing (alt, checked, for, id, src, type_)
+import Html.Styled.Events exposing (onClick)
 import Http
 import Json.Decode exposing (Decoder, bool, field, int, list, null, oneOf, string)
 import List exposing (map)
 import Random
 import Randomisers exposing (combineRandoms, filteredRandom, randomiser)
+import Styles exposing (button, cardImage, landscapeCardImage, mainDiv, selectDiv, cardsDiv)
 import Types exposing (Cards(..), Promos(..), Sets(..), SetsToChoose)
 
 
@@ -23,7 +24,7 @@ main =
         { init = init
         , update = update
         , subscriptions = subscriptions
-        , view = view
+        , view = view >> toUnstyled
         }
 
 
@@ -361,16 +362,16 @@ viewMore model =
             text "Loading sets..."
 
         GetSets (Success sets) ->
-            setChoice sets { sets = Sets [], promos = Promos [] }
+            mainDiv [] [setChoice sets { sets = Sets [], promos = Promos [] }]
 
         Choosing sets chosen ->
-            setChoice sets chosen
+            mainDiv [] [setChoice sets chosen]
 
         GetCards sets chosen status ->
-            div [] [ setChoice sets chosen, viewCards status ]
+            mainDiv [] [ setChoice sets chosen, viewCards status ]
 
         ChosenCards sets chosen randomised ->
-            div [] [ setChoice sets chosen, viewCardImages randomised ]
+            mainDiv [] [ setChoice sets chosen, viewCardImages randomised ]
 
 
 setChoice : SetsToChoose -> SetsToChoose -> Html Msg
@@ -439,7 +440,7 @@ setChoice all chosen =
         transformName =
             String.split "-" >> map titleCase >> String.join " "
     in
-    div []
+    selectDiv []
         [ button [ onClick SelectAll ] [ text "Select All" ]
         , button [ onClick DeselectAll ] [ text "Deselect All " ]
         ]
@@ -464,23 +465,29 @@ viewCards : ApiStatus Cards -> Html Msg
 viewCards status =
     case status of
         Failure ->
-            div []
+            cardsDiv []
                 [ text "There was a problem getting cards, please try again." ]
 
         Loading ->
-            text "Loading cards..."
+            cardsDiv [] [text "Loading cards..."]
 
         Success _ ->
-            text "Loading cards.."
+            cardsDiv [] [text "Loading cards..."]
 
 
 viewCardImages : List String -> Html Msg
 viewCardImages names =
-    names |> map getCardImage |> div []
+    (List.take 10 names
+        |> map (getCardImage cardImage)
+    )
+        ++ (List.drop 10 names
+                |> map (getCardImage landscapeCardImage)
+           )
+        |> cardsDiv []
 
 
-getCardImage : String -> Html Msg
-getCardImage name =
+getCardImage : (List (Attribute msg) -> List (Html msg) -> Html msg) -> String -> Html msg
+getCardImage imgStyle name =
     let
         transformedName =
             "%PUBLIC_URL%/card-images/"
@@ -494,7 +501,7 @@ getCardImage name =
                    )
                 ++ ".jpg"
     in
-    img [ src transformedName, alt name, style "width" "150px" ] []
+    imgStyle [ src transformedName, alt name ] []
 
 
 titleCase : String -> String
@@ -619,7 +626,7 @@ promosDecoder =
 
 
 -- TO DO:
--- - add CSS (using elm-css package, rather than separate CSS file)
+-- - add/improve styling (ongoing)
 -- - add logic for any individual cards:
 -- -- (eg Young Witch needs an 11th card, and a way to visually identify it as the Bane)
 -- -- Black Market deck (need options for how many cards, or whether to include all!)
