@@ -10,7 +10,7 @@ import Json.Decode exposing (Decoder, bool, field, int, list, null, oneOf, strin
 import List exposing (map)
 import Random
 import Randomisers exposing (combineRandoms, filteredRandom, randomiser)
-import Styles exposing (button, cardImage, landscapeCardImage, mainDiv, selectDiv, cardsDiv)
+import Styles exposing (button, cardImage, cardsDiv, landscapeCardImage, mainDiv, selectDiv)
 import Types exposing (Cards(..), Promos(..), Sets(..), SetsToChoose)
 
 
@@ -362,10 +362,10 @@ viewMore model =
             text "Loading sets..."
 
         GetSets (Success sets) ->
-            mainDiv [] [setChoice sets { sets = Sets [], promos = Promos [] }]
+            mainDiv [] [ setChoice sets { sets = Sets [], promos = Promos [] } ]
 
         Choosing sets chosen ->
-            mainDiv [] [setChoice sets chosen]
+            mainDiv [] [ setChoice sets chosen ]
 
         GetCards sets chosen status ->
             mainDiv [] [ setChoice sets chosen, viewCards status ]
@@ -441,24 +441,25 @@ setChoice all chosen =
             String.split "-" >> map titleCase >> String.join " "
     in
     selectDiv []
-        [ button [ onClick SelectAll ] [ text "Select All" ]
-        , button [ onClick DeselectAll ] [ text "Deselect All " ]
-        ]
-        :: (map renderInList allSets
-                ++ strong [] [ text "promo cards:" ]
-                :: (getKingdomSets >> map renderInList) allPromos
-           )
-        |> (\html ->
-                html
-                    ++ [ button
-                            [ chosen
-                                |> Generate
-                                |> onClick
-                            ]
-                            [ text "generate cards" ]
-                       ]
-           )
-        |> div []
+        (div []
+            [ button [ onClick SelectAll ] [ text "Select All" ]
+            , button [ onClick DeselectAll ] [ text "Deselect All " ]
+            ]
+            :: (map renderInList allSets
+                    ++ strong [] [ text "promo cards:" ]
+                    :: (getKingdomSets >> map renderInList) allPromos
+               )
+            |> (\html ->
+                    html
+                        ++ [ button
+                                [ chosen
+                                    |> Generate
+                                    |> onClick
+                                ]
+                                [ text "generate cards" ]
+                           ]
+               )
+        )
 
 
 viewCards : ApiStatus Cards -> Html Msg
@@ -469,10 +470,10 @@ viewCards status =
                 [ text "There was a problem getting cards, please try again." ]
 
         Loading ->
-            cardsDiv [] [text "Loading cards..."]
+            cardsDiv [] [ text "Loading cards..." ]
 
         Success _ ->
-            cardsDiv [] [text "Loading cards..."]
+            cardsDiv [] [ text "Loading cards..." ]
 
 
 viewCardImages : List String -> Html Msg
