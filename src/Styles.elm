@@ -1,4 +1,4 @@
-module Styles exposing (button, cardImage, cardsDiv, landscapeCardImage, mainDiv, selectDiv)
+module Styles exposing (button, cardImage, cardsDiv, gapAbove, gapBelow, landscapeCardImage, mainDiv, selectDiv)
 
 import Css exposing (..)
 import Html.Styled exposing (Attribute, Html, div, img, styled)
@@ -45,3 +45,21 @@ selectDiv =
 cardsDiv : List (Attribute msg) -> List (Html msg) -> Html msg
 cardsDiv =
     styled div [ flex3 (int 3) (int 1) (px 500) ]
+
+
+gapAbove :
+    (List (Attribute msg) -> List (Html msg) -> Html msg)
+    -> List (Attribute msg)
+    -> List (Html msg)
+    -> Html msg
+gapAbove element =
+    styled element [ marginTop (px 15) ]
+
+
+gapBelow :
+    (List (Attribute msg) -> List (Html msg) -> Html msg)
+    -> List (Attribute msg)
+    -> List (Html msg)
+    -> Html msg
+gapBelow element =
+    styled element [ marginBottom (px 15) ]
