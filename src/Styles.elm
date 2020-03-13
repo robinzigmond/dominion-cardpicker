@@ -1,7 +1,33 @@
-module Styles exposing (button, cardImage, cardsDiv, gapAbove, gapBelow, landscapeCardImage, mainDiv, selectDiv)
+module Styles exposing
+    ( button
+    , cardImage
+    , cardsDiv
+    , gapAbove
+    , gapBelow
+    , globalStyles
+    , landscapeCardImage
+    , largeCheckbox
+    , mainDiv
+    , pointing
+    , selectDiv
+    )
 
 import Css exposing (..)
-import Html.Styled exposing (Attribute, Html, div, img, styled)
+import Css.Global exposing (body, global)
+import Html.Styled exposing (Attribute, Html, div, img, input, styled)
+import Html.Styled.Attributes exposing (type_)
+
+
+globalStyles : Html msg
+globalStyles =
+    [ body
+        [ margin2 (px 10) (pct 2)
+        , backgroundColor (rgb 190 180 86)
+        , color (rgb 24 25 51)
+        , fontSize (px 18)
+        ]
+    ]
+        |> global
 
 
 button : List (Attribute msg) -> List (Html msg) -> Html msg
@@ -15,6 +41,7 @@ button =
         , color (rgb 250 210 210)
         , cursor pointer
         , margin2 (px 0) (px 5)
+        , fontSize (em 1)
         ]
 
 
@@ -62,4 +89,18 @@ gapBelow :
     -> List (Html msg)
     -> Html msg
 gapBelow element =
-    styled element [ marginBottom (px 15) ]
+    styled element [ marginBottom (em 1.1) ]
+
+
+pointing :
+    (List (Attribute msg) -> List (Html msg) -> Html msg)
+    -> List (Attribute msg)
+    -> List (Html msg)
+    -> Html msg
+pointing element =
+    styled element [ cursor pointer ]
+
+
+largeCheckbox : List (Attribute msg) -> Html msg
+largeCheckbox attrs =
+    styled input [ width (px 22), height (px 22) ] (type_ "checkbox" :: attrs) []

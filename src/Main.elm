@@ -10,7 +10,19 @@ import Json.Decode exposing (Decoder, bool, field, int, list, null, oneOf, strin
 import List exposing (map)
 import Random
 import Randomisers exposing (combineRandoms, filteredRandom, randomiser)
-import Styles exposing (button, cardImage, cardsDiv, gapBelow, landscapeCardImage, mainDiv, selectDiv)
+import Styles
+    exposing
+        ( button
+        , cardImage
+        , cardsDiv
+        , gapBelow
+        , globalStyles
+        , landscapeCardImage
+        , largeCheckbox
+        , mainDiv
+        , pointing
+        , selectDiv
+        )
 import Types exposing (Cards(..), Promos(..), Sets(..), SetsToChoose)
 
 
@@ -344,7 +356,8 @@ subscriptions _ =
 view : Model -> Html Msg
 view model =
     div []
-        [ h2 [] [ text "Dominion cardpicker" ]
+        [ globalStyles
+        , gapBelow h2 [] [ text "Dominion cardpicker" ]
         , viewMore model
         ]
 
@@ -407,10 +420,9 @@ setChoice all chosen =
                         div
             in
             theDiv []
-                [ label [ for set ] [ text niceName ]
-                , input
-                    [ type_ "checkbox"
-                    , id set
+                [ pointing label [ for set ] [ text niceName ]
+                , pointing (\attrs _ -> largeCheckbox attrs)
+                    [ id set
                     , onClick (Toggle set)
                     , checked
                         (List.member set chosenSets
@@ -446,8 +458,12 @@ setChoice all chosen =
                     renderAsCheckbox name (transformName name)
 
         transformName =
-            String.split "-" >> map titleCase >> String.join " "
-            >> String.split "/" >> map titleCase >> String.join "/"
+            String.split "-"
+                >> map titleCase
+                >> String.join " "
+                >> String.split "/"
+                >> map titleCase
+                >> String.join "/"
     in
     selectDiv []
         [ gapBelow div
