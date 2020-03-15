@@ -1,7 +1,7 @@
-module CardUtils exposing (getKingdomSets, isLandscape)
+module CardUtils exposing (getKingdomSets, isLandscape, toPile)
 
-import Set
-import Types exposing (Card)
+import List.Extra exposing (uniqueBy)
+import Types exposing (Card, PileToShow)
 
 
 landscapes : List String
@@ -9,7 +9,7 @@ landscapes =
     [ "event", "landmark", "project" ]
 
 
-getKingdomSets : List Card -> List String
+getKingdomSets : List Card -> List PileToShow
 getKingdomSets listOfCards =
     let
         go cardlist groups =
@@ -42,46 +42,47 @@ getKingdomSets listOfCards =
                                     groups
 
         friendlyName group =
-            if List.member "dame-molly" group then
+            if List.any (\card -> card.name == "dame-molly") group then
                 "knights"
 
-            else if List.member "small-castle" group then
+            else if List.any (\card -> card.name == "small-castle") group then
                 "castles"
 
-            else if
-                List.length group == 2
-
-            then
-                String.join "/" group
+            else if List.length group == 2 then
+                group |> List.map .name |> String.join "/"
 
             else if List.length group == 1 then
                 case group of
-                    name :: _ ->
-                        name
+                    card :: _ ->
+                        card.name
 
                     [] ->
                         "should-never-happen"
 
             else
-                String.join "&" group
+                group |> List.map .name |> String.join "&"
 
-        combinedCost cardName =
-            let
-                card =
-                    case cardWithName listOfCards cardName of
-                        Just c ->
-                            c
+        toPileFromGroup group =
+            group
+                |> List.sortBy combinedCost
+                |> (\cards ->
+                        case cards of
+                            cheapest :: _ ->
+                                let
+                                    cheapestAsPile =
+                                        toPile cheapest
+                                in
+                                { cheapestAsPile | name = friendlyName cards }
 
-                        Nothing ->
-                            { name = "i-dont-exist"
-                            , isKingdom = False
-                            , linkedCards = []
-                            , coinCost = 0
-                            , potionCost = False
-                            , debtCost = 0
-                            , types = []
-                            }
-            in
+                            [] ->
+                                { name = "strange empty group"
+                                , coinCost = 0
+                                , potionCost = False
+                                , debtCost = 0
+                                }
+                   )
+
+        combinedCost card =
             100
                 * card.coinCost
                 + 10
@@ -94,13 +95,8 @@ getKingdomSets listOfCards =
                   )
     in
     go listOfCards []
-        |> List.map
-            (List.map .name
-                >> Set.fromList
-                >> Set.toList
-                >> List.sortBy combinedCost
-                >> friendlyName
-            )
+        |> List.map (uniqueBy .name)
+        |> List.map toPileFromGroup
 
 
 linkedKingdoms : Card -> List Card -> List Card
@@ -133,3 +129,12 @@ isLandscape card =
 
         _ ->
             False
+
+
+toPile : Card -> PileToShow
+toPile card =
+    { name = card.name
+    , coinCost = card.coinCost
+    , potionCost = card.potionCost
+    , debtCost = card.debtCost
+    }

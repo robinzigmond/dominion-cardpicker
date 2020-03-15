@@ -1,4 +1,4 @@
-module Types exposing (Sets(..), Promos(..), SetsToChoose, Card, Cards(..))
+module Types exposing (Card, Cards(..), PileToShow, Promos(..), Sets(..), SetsToChoose)
 
 
 type Sets
@@ -23,6 +23,14 @@ type alias Card =
     , potionCost : Bool
     , debtCost : Int
     , types : List String
+    }
+
+
+type alias PileToShow =
+    { name : String
+    , coinCost : Int
+    , potionCost : Bool
+    , debtCost : Int
     }
 
 

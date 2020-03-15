@@ -1,9 +1,9 @@
 module Main exposing (main)
 
 import Browser
-import CardUtils exposing (getKingdomSets, isLandscape)
-import Html.Styled exposing (Attribute, Html, div, h2, input, label, strong, text, toUnstyled)
-import Html.Styled.Attributes exposing (alt, checked, for, id, src, type_)
+import CardUtils exposing (getKingdomSets, isLandscape, toPile)
+import Html.Styled exposing (Attribute, Html, div, h2, label, strong, text, toUnstyled)
+import Html.Styled.Attributes exposing (alt, checked, for, id, src)
 import Html.Styled.Events exposing (onClick)
 import Http
 import Json.Decode exposing (Decoder, bool, field, int, list, null, oneOf, string)
@@ -23,7 +23,7 @@ import Styles
         , pointing
         , selectDiv
         )
-import Types exposing (Cards(..), Promos(..), Sets(..), SetsToChoose)
+import Types exposing (Cards(..), PileToShow, Promos(..), Sets(..), SetsToChoose)
 
 
 
@@ -54,7 +54,7 @@ type Model
     = GetSets (ApiStatus SetsToChoose)
     | Choosing SetsToChoose SetsToChoose -- all sets to choose, and those currently chosen
     | GetCards SetsToChoose SetsToChoose (ApiStatus Cards) -- as above
-    | ChosenCards SetsToChoose SetsToChoose (List String)
+    | ChosenCards SetsToChoose SetsToChoose (List PileToShow)
 
 
 init : () -> ( Model, Cmd Msg )
@@ -75,7 +75,7 @@ type Msg
     | DeselectAll
     | Generate SetsToChoose
     | GotCards (Result Http.Error Cards)
-    | Randomised (List String)
+    | Randomised (List PileToShow)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -280,23 +280,20 @@ update msg model =
                                                 |> getKingdomSets
                                                 |> randomiser 10
                                             )
-                                            (filteredRandom isLandscape 2 cards |> Random.map (map .name))
+                                            (filteredRandom isLandscape 2 cards |> Random.map (map toPile))
                                    )
                                 |> Random.generate Randomised
                             )
 
                         GetCards all current _ ->
                             ( GetCards all current Loading
-                            , cardlist
-                                |> (\cards ->
-                                        combineRandoms
-                                            (cards
-                                                |> List.filter .isKingdom
-                                                |> getKingdomSets
-                                                |> randomiser 10
-                                            )
-                                            (filteredRandom isLandscape 2 cards |> Random.map (map .name))
-                                   )
+                            , combineRandoms
+                                (cardlist
+                                    |> List.filter .isKingdom
+                                    |> getKingdomSets
+                                    |> randomiser 10
+                                )
+                                (cardlist |> filteredRandom isLandscape 2 |> Random.map (map toPile))
                                 |> Random.generate Randomised
                             )
 
@@ -473,7 +470,7 @@ setChoice all chosen =
             ]
         , gapBelow div [] (map renderInList allSets)
         , strong [] [ text "promo cards:" ]
-        , (getKingdomSets >> map renderInList >> gapBelow div []) allPromos
+        , (getKingdomSets >> map .name >> map renderInList >> gapBelow div []) allPromos
         , button
             [ chosen
                 |> Generate
@@ -497,7 +494,7 @@ viewCards status =
             cardsDiv [] [ text "Loading cards..." ]
 
 
-viewCardImages : List String -> Html Msg
+viewCardImages : List PileToShow -> Html Msg
 viewCardImages names =
     (List.take 10 names
         |> map (getCardImage cardImage)
@@ -508,12 +505,12 @@ viewCardImages names =
         |> cardsDiv []
 
 
-getCardImage : (List (Attribute msg) -> List (Html msg) -> Html msg) -> String -> Html msg
-getCardImage imgStyle name =
+getCardImage : (List (Attribute msg) -> List (Html msg) -> Html msg) -> PileToShow -> Html msg
+getCardImage imgStyle pile =
     let
         transformedName =
             "%PUBLIC_URL%/card-images/"
-                ++ (name
+                ++ (pile.name
                         |> String.split "-"
                         |> map titleCase
                         |> String.join "_"
@@ -523,7 +520,7 @@ getCardImage imgStyle name =
                    )
                 ++ ".jpg"
     in
-    imgStyle [ src transformedName, alt name ] []
+    imgStyle [ src transformedName, alt pile.name ] []
 
 
 titleCase : String -> String
@@ -656,7 +653,7 @@ promosDecoder =
 -- - logic for deciding whether to use Platinum/Colony, or Shelters
 -- - allow users to alter the logic for picking landscape cards (at the moment it's always 2, but allow
 -- "full random" with no limit, or with a limit of 2 or some other number, or with limits per type,
--- or a fixed number of each type...)
+-- or a fixed number of each type...). Similar options for Colonies and Shelters
 -- - add facility to ban individual cards
 -- - other options like no attacks, no attacks without moat, at least one village etc
 -- - option to order cards by name or price?
